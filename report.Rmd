@@ -7,13 +7,14 @@ output:
 header-includes:
   - \usepackage{tikz}
   - \usetikzlibrary{shapes, arrows.meta}  # Use the necessary TikZ libraries
+  - \usepackage{float}
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Task 1: **Data Exploration**
+## **Data Exploration**
 
 ### Overview
 
@@ -120,7 +121,7 @@ Let us consider a graphical model.
 
 ![](images/clipboard-3731211564.png){width="100"}
 
-Sampling each data point includes two steps. The latent variables are drawn from a prior $p(z)$ and the data are conditioned on $z$ and sampled according to $p_{\theta}(x|z)$. Suppose we are interested in the latent variable, then by using Bayes' theorem we obtain posterior distribution $p(z|x) = \frac{p_{\theta}(x|z)p(z)}{\int p_{\theta}(x|z)p(z) dz }$. Unfortunately, this integral could be, and often is, intractable. In variational inference we approximate the posterior by some distribution $q_{\phi}(z|x)$, where $\phi$ is a parameter. To measure how closely $q$ approximates $p$ we use Kullback-Leibner divergence. The Kullback-Leibner divergence is defined as $D_{KL} (P \parallel Q) = \int p(x) \log{\frac{p(x)}{q(x)}}dx = E_{p} [ \log(p(x)) - \log(q(x))]$ and by minimizing it we ensure the two distributions are similar. In our case we minimise $$
+Sampling each data point includes two steps. The latent variables are drawn from a prior $p(z)$ and the data are conditioned on $z$ and sampled according to $p_{\theta}(x|z)$. Suppose we are interested in the latent variable, then by using Bayes' theorem we obtain posterior distribution $p(z|x) = \frac{p_{\theta}(x|z)p(z)}{\int p_{\theta}(x|z)p(z) dz }$. Unfortunately, this integral could be, and often is, intractable. In variational inference we approximate the posterior by some distribution $q_{\phi}(z|x)$, where $\phi$ is a parameter. To measure how closely $q$ approximates $p$ we use Kullback-Leibner divergence. The Kullback-Leibner divergence is defined as $$D_{KL} (P \parallel Q) = \int p(x) \log{\frac{p(x)}{q(x)}}dx = E_{p} [ \log(p(x)) - \log(q(x))]$$ and by minimizing it we ensure the two distributions are similar. In our case we minimise $$
 \begin{aligned}
 D_{KL} (q_{\phi}(z \mid x) \parallel p_{\theta} (z \mid x)) 
 &= - E_{q} \Big[ \log(p_{\theta} (z , x)) - \log(p(x)) - \log(q_{\phi}(z \mid x)) \Big] \\
@@ -141,7 +142,7 @@ Below, using Jensen's inequality we obtain the so called evidence lower bound, o
 
 $$ \log(p(x)) = \log \int_{z}( p(x, z)) = \log \int_{z}( p(x, z)) \frac{q_{\phi}(z \mid x)}{q_{\phi}(z \mid x)} = \log(E_{q}[\frac{p(x,z)}{q_{\phi}(z \mid x)}]) \geq E_{q}[\log(p(x,z))] - E_{q}[\log q_{\phi}(z \mid x)]$$
 
-Now when we return to the KL divergence we see that: $D_{KL} (q_{\phi}(z \mid x) \parallel p_{\theta} (z \mid x)) = E_{q}[\log(q_{\phi}(z \mid x))] - E_{q}[\log(p_{\theta} (z , x))] + \log(p(x)) = -ELBO + \log(p(x))$. This is the negative ELBO plus the log marginal probability of $x$. Notice that $\log(p(x))$ does not depend on $q$, so, as a function of the variational distribution, minimizing the KL divergence is the same as maximizing the ELBO. The difference between the ELBO and the KL divergence is the log normalizer, which is what the ELBO bounds. We can rewrite ELBO as $$
+Now when we return to the KL divergence we see that: $$D_{KL} (q_{\phi}(z \mid x) \parallel p_{\theta} (z \mid x)) = E_{q}[\log(q_{\phi}(z \mid x))] - E_{q}[\log(p_{\theta} (z , x))] + \log(p(x)) = -ELBO + \log(p(x)).$$ This is the negative ELBO plus the log marginal probability of $x$. Notice that $\log(p(x))$ does not depend on $q$, so, as a function of the variational distribution, minimizing the KL divergence is the same as maximizing the ELBO. The difference between the ELBO and the KL divergence is the log normalizer, which is what the ELBO bounds. We can rewrite ELBO as $$
 \begin{aligned}
 E_{q}[\log(p_{\theta}(x,z))] - E_{q}[\log q_{\phi}(z \mid x)] 
 &= -  E_{q}[\log q_{\phi}(z \mid x)] + E_{q}[\log(p_{\theta}(z))] + E_{q}[\log(p_{\theta}(x \mid z))] \\
@@ -158,3 +159,151 @@ and because we assume our $p$ to be normally distributed, the $D_{KL}$ becomes $
 We want our samples to deterministically depend on the parameters of the distribution. For example, in a normally-distributed variable with mean $\mu$ and standard devation $\sigma$, we can sample from it like this $z = \mu + \sigma \odot \epsilon$, where $\epsilon \sim N(0,I)$ and is not parametrised by $\phi$. The reparametrization trick lets us backpropagate (take derivatives using the chain rule) with respect to $\phi$ through the objective (the ELBO) which is a function of samples of the latent variables $z$.
 
 ![Reparametrization trick](images/clipboard-2609027508.png){width="200"}
+
+## Methods
+
+In this project, VAE were implemented using PyTorch package. The models were designed with different number of hidden layers and different dimension. Before passing to the network, each data set were scalecd to zero mean and unit variance, to ensure numerical stability, as raw counts often resulted in `NaNs.`Each layer was batch normalized and passed through a rectifier layer. Chosen architectures of VAE are summarised:
+
+| Hidden Layers    | Latent Dimension |
+|------------------|------------------|
+| [1024, 512, 256] | 32               |
+| [1024, 512, 256] | 64               |
+| [256, 128]       | 128              |
+| [256]            | 32               |
+
+Then, the models were trained on three datasets each: processed counts ( `adata.X` ), raw counts (`adata.layers['counts']`) and raw counts transformed with Pearson residual normalization and log1 transformed (`adata_test.layers['counts_processed']`). Due to resources, number of training epochs was limited to 30, after which training loss seemed to reach its plateau. Training process can be visualised as follows:
+
+![Training loss on processed counts (Dataset 1)](images/clipboard-1702365287.png)
+
+To better understand learning process we can split the loss into two components, namely KL divergence and reconstruction loss.
+
+![](images/clipboard-3318079149.png)
+
+```{r, echo= FALSE,include=FALSE}
+library(kableExtra)
+library(dplyr)
+library(readr)
+
+# Read the Markdown table
+markdown_table <- "
+| Arch | Dataset1 | Dataset2 | Dataset3 | Mean loss |
+|------------------------:|-----------:|-----------:|-----------:|-----------:|
+| hidden_[1024, 512, 256]_latent_32 | 4905.42 | 4999.99 | 4886.61 | 4930.67 |
+| hidden_[1024, 512, 256]_latent_64 | 4914.21 | 4999.99 | 4854.98 | 4923.06 |
+| hidden_[256, 128]_latent_128 | 4844.08 | 4892.53 | 4749.47 | 4828.69 |
+| hidden_[256]_latent_32 | 4744.35 | 4843.7 | 4618.03 | 4735.36 |
+| Mean | 4852.01 | 4934.05 | 4777.27 | 4854.45 |
+"
+
+# Convert the Markdown table into a data frame
+df <- read_delim(markdown_table, delim = "|", trim_ws = TRUE,show_col_types = FALSE) %>% select(-c(1,7))
+df <- df[-1, ]
+
+```
+
+## Results
+
+### Models statistics
+
+The models were then evaluated on test (or in fact validation) sets. The results of this evaluation are summarised in the table below.
+
+```{r, echo = FALSE, results='asis'}
+df %>%
+  kbl(booktabs = T, align = "r") %>%
+  kable_styling(full_width = F) %>%
+  row_spec(4, background = "lightgray", hline_after = TRUE) %>%
+  column_spec(4, background = "lightgray", border_right = T) %>%
+  kable_styling(latex_options = 'HOLD_position')
+  
+```
+
+On average the models performed best on Dataset 3, which is after residuals normalization. Also, the best model with respect to mean loss proved to be the model with one hidden layer with dimension 256 and latent space dimension of 32. However we can notice two interesting observations. Firstly, the differences are fairly modest. Secondly, we need to chose the the architecture of the model very carefully and more is not necessarily better, as proved by different model with the same dimensionality of latent space but more hidden layers with bigger sizes, which by contrast proved to be the worst performing model.
+
+We can further split the loss in reconstruction and regularization loss.
+
+```{r, echo=FALSE}
+
+# Data for the tables
+arch <- c("hidden_[1024, 512, 256]_latent_32", "hidden_[1024, 512, 256]_latent_64", 
+          "hidden_[256, 128]_latent_128", "hidden_[256]_latent_32", "Mean")
+dataset1 <- c(4895.5, 4905.01, 4828.29, 4704.56, 4833.34)
+dataset2 <- c(4999.99, 4999.99, 4876.91, 4798.58, 4918.87)
+dataset3 <- c(4876.97, 4843.18, 4731.51, 4570.5, 4755.54)
+mean_loss <- c(4924.15, 4916.06, 4812.24, 4691.21, 4835.92)
+
+# Mean Loss Table
+loss_table <- data.frame(Arch = arch, Dataset1 = dataset1, Dataset2 = dataset2, 
+                         Dataset3 = dataset3, Mean_loss = mean_loss)
+
+# Reconstruction Loss Data
+reconstruction_loss <- data.frame(
+  Arch = arch,
+  Dataset1 = c(9.92, 9.2, 15.79, 39.8, 18.68),
+  Dataset2 = c(0, 0, 15.61, 45.11, 15.18),
+  Dataset3 = c(9.64, 11.8, 17.96, 47.53, 21.73),
+  Mean_loss = c(6.52, 7, 16.45, 44.15, 18.53)
+)
+
+# Create and style the Mean Loss table with kable
+loss_table %>%
+  kbl(booktabs = T, align = "r", caption = "Reconstruction Loss") %>%
+  kable_styling(full_width = F) %>%
+  row_spec(4,  hline_after = TRUE) %>%
+  column_spec(4, border_right = T) %>%
+  kable_styling(latex_options = 'HOLD_position')
+# Create and style the Reconstruction Loss table with kable
+
+
+```
+```{r, echo=FALSE}
+reconstruction_loss %>%  
+  kbl(booktabs = T, align = "r", caption = "Regularization Loss") %>%
+  kable_styling(full_width = F) %>%
+  row_spec(4,  hline_after = TRUE) %>%
+  column_spec(4, border_right = T) %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+
+We clearly see, that the KL divergence part of the loss function is of orders of magnitude smaller than the reconstruction loss. Moreover, the KL values tend to decrease with increasing model size.
+
+### Latent space visualisation
+
+Below we present emmbeding of datapoints into latent space using t-SNE. **t-SNE** (t-distributed Stochastic Neighbor Embedding) is a dimensionality reduction technique primarily used for visualizing high-dimensional data in lower dimensions. It works by converting similarities between data points into joint probabilities and then minimizing the Kullback-Leibler divergence between the joint probabilities and the probabilities of the low-dimensional embeddings. This helps to preserve the local structure of the data, making it useful for visualizing clusters and separating different groups within a dataset.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/clipboard-1393500199.png}
+  \caption{Latent space visualisation with t-SNE}
+\end{figure}
+
+Data points are coloured according to their cell type. As we can see, they not necessarily cluster together, what would be the expected results. Also, the raw counts data does not seem suitable, causing anomalies in the embedding - using t-SNE it is obvious for one model, but comparing the results with PCA (for Dataset 2) we get:
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/clipboard-2868378384.png}
+  \caption{PCA on Dataset 2}
+\end{figure}
+
+Obtained results highlight the need for adequate data preprocessing before further analyses.
+
+### Model selection
+
+After inspecting model statistics and latent space visualization, I decided to further analyse model with one hidden layer of size 256 and latent space dimension 32.cell types. It reached the best loss in the training process, and proved best on validation data. Also, the results suggest that increasing model size does not improve its performance. Based on t-SNE plot the model also seems to have reasonable resolution in separating cell types.
+
+### Visulaisations
+
+Below we present a figure of **latent space t-SNE embedding** with observations colored by batch, site and donor.
+
+![t-SNE embedding of best model, coloured by cell type, batch, site and donor, respectively.](images/clipboard-3144855554.png){width="600"}
+
+Although no clear separation can be seen, on closer inspection we can see that points tend to group together, especially when we colour them by Site. To some extent it can be explained by batch effect. On the other hand, we could speculate that chosen architecture can mitigate negative batch effects, or they were minimal in the dataset, because generally the data seems to be well mixed after dimensionality reduction. Unfortunately, the naive VAE architecture may not be suitable to capture scRNA-Seq data well. When we look at latent representation coloured by cell type the clustering seems to be only half correct and we wouldexpect more distinct grouping of observation. Perhaps change to architecture or assumed $p(x)$ distribution would yield better results.
+
+When we visualize **t-SNE on input data**, we can see the batch effects more clearly, especially when we look at colouring based on batch and donor. We can also see that cell types tend to group together.
+
+![t-SNE on test dataset](images/clipboard-3935058670.png){width="600"}
+
+Visualizing input data further points us towards searching a better fitting distribution of latent variables.
+
+### Conclusions
+
+Use of autoencoders is becoming more and more popular in context of sequencing data. However it is crucial to chose adequate models architecture that will be able to accurately represent complexities of the data. Due to high sparsity and variability of sequencing data, it is crucial to preprocess the data before further analysis. Also, as we could see in the latent space visualization, Gaussian VAE may not be the best choice for the task, as it may not encode the input data preserving all relationships between observations. Also, we need to take into account batch effects that can compromise further analyses. I believe that this would be a good starting point to further optimise VAEs design and architecture to utilize it for single cell data.
